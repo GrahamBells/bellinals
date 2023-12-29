@@ -1,4 +1,4 @@
-# Ordibells
+# Bellinals
 
 A minter and protocol for inscriptions on Bellscoin. 
 
@@ -75,7 +75,7 @@ node . mint BSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn bell.jpeg
 node . mint BSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn "text/plain;charset=utf8" 576f6f6621 
 ```
 
-**Note**: Please use a fresh wallet to mint to with nothing else in it until proper wallet for ordibells support comes.
+**Note**: Please use a fresh wallet to mint to with nothing else in it until proper wallet for bellinals support comes.
 
 ## Viewing
 
@@ -93,7 +93,7 @@ http://localhost:3000/tx/15f3b73df7e5c072becb1d84191843ba080734805addfccb6509297
 
 ## Protocol
 
-The ordibells protocol allows any size data to be inscribed onto subwoofers.
+The bellinals protocol allows any size data to be inscribed onto subwoofers.
 
 An inscription is defined as a series of push datas:
 
@@ -105,7 +105,7 @@ OP_0
 "Woof!"
 ```
 
-For ordibells, we introduce a couple extensions. First, content may spread across multiple parts:
+For bellinals, we introduce a couple extensions. First, content may spread across multiple parts:
 
 ```
 "ord"
