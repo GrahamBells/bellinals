@@ -2,6 +2,8 @@
 
 A minter and protocol for inscriptions on Bellscoin. 
 
+Fork from https://github.com/apezord/doginals
+
 ## Setup
 
 Install dependencies:
