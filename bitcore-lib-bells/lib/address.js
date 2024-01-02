@@ -88,8 +88,8 @@ function Address(data, network, type) {
 /**
  * Internal function used to split different kinds of arguments of the constructor
  * @param {*} data - The encoded data in various formats
- * @param {Network|string|number} network - The network: 'livenet' or 'testnet'
- * @param {string} type - The type of address: 'scripthash' or 'pubkeyhash'
+ * @param {Network|String|number=} network - The network: 'livenet' or 'testnet'
+ * @param {string=} type - The type of address: 'script' or 'pubkey'
  * @returns {Object} An "info" object with "type", "network", and "hashBuffer"
  */
 Address.prototype._classifyArguments = function(data, network, type) {
@@ -100,7 +100,7 @@ Address.prototype._classifyArguments = function(data, network, type) {
   } else if ((data instanceof Buffer || data instanceof Uint8Array) && data.length === 21) {
     return Address._transformBuffer(data, network, type);
   } else if (data instanceof PublicKey) {
-    return Address._transformPublicKey(data, network, type);
+    return Address._transformPublicKey(data);
   } else if (data instanceof Script) {
     return Address._transformScript(data, network);
   } else if (typeof(data) === 'string') {
@@ -216,18 +216,16 @@ Address._transformBuffer = function(buffer, network, type) {
  * Internal function to transform a {@link PublicKey}
  *
  * @param {PublicKey} pubkey - An instance of PublicKey
- * @param {string} network - mainnet, testnet, or regtest
- * @param {string} type - Either 'pubkeyhash' or 'scripthash'
  * @returns {Object} An object with keys: hashBuffer, type
  * @private
  */
-Address._transformPublicKey = function(pubkey, network, type) {
+Address._transformPublicKey = function(pubkey) {
   var info = {};
   if (!(pubkey instanceof PublicKey)) {
     throw new TypeError('Address must be an instance of PublicKey.');
   }
   info.hashBuffer = Hash.sha256ripemd160(pubkey.toBuffer());
-  info.type = type || Address.PayToPublicKeyHash;
+  info.type = Address.PayToPublicKeyHash;
   return info;
 };
 
@@ -287,12 +285,11 @@ Address._transformString = function(data, network, type) {
  * Instantiate an address from a PublicKey instance
  *
  * @param {PublicKey} data
- * @param {string|Network} network - either a Network instance, 'livenet', or 'testnet'
- * @param {string} type - Either 'pubkeyhash' or 'scripthash' 
+ * @param {String|Network} network - either a Network instance, 'livenet', or 'testnet'
  * @returns {Address} A new valid and frozen instance of an Address
  */
-Address.fromPublicKey = function(data, network, type) {
-  var info = Address._transformPublicKey(data, network, type);
+Address.fromPublicKey = function(data, network) {
+  var info = Address._transformPublicKey(data);
   network = network || Networks.defaultNetwork;
   return new Address(info.hashBuffer, network, info.type);
 };

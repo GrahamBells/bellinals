@@ -1,7 +1,7 @@
 {
-  "name": "bitcore-lib-bell",
-  "version": "10.0.21",
-  "description": "A pure and powerful JavaScript Bell library.",
+  "name": "bitcore-lib-doge",
+  "version": "8.25.46",
+  "description": "A pure and powerful JavaScript Dogecoin library.",
   "author": "BitPay <dev@bitpay.com>",
   "main": "index.js",
   "scripts": {
@@ -45,11 +45,12 @@
     "scryptsy": "2.1.0"
   },
   "devDependencies": {
-    "bitcore-build": "^10.0.21",
+    "bitcore-build": "^8.25.46",
     "brfs": "^2.0.1",
     "chai": "^4.2.0",
-    "gulp": "^4.0.2",
+    "gulp": "^4.0.0",
     "sinon": "^7.1.1"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "gitHead": "17c02f181ba8f96b408951bb511549b0b41b4607"
 }
