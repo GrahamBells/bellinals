@@ -18,7 +18,7 @@ if (process.env.TESTNET == 'true') {
 if (process.env.FEE_PER_KB) {
     Transaction.FEE_PER_KB = parseInt(process.env.FEE_PER_KB)
 } else {
-    Transaction.FEE_PER_KB = 100000
+    Transaction.FEE_PER_KB = 100000000
 }
 
 const WALLET_PATH = process.env.WALLET || '.wallet.json'
@@ -115,8 +115,8 @@ async function walletSync() {
         return {
             txid: output.txid,
             vout: output.vout,
-            script: output.scriptPubKey,
-            satoshis: (output.amount * 100000000)
+            satoshis: (output.amount * 100000000),
+            script: output.scriptPubKey
         }
     })
 
@@ -205,7 +205,6 @@ async function mintBellmap() {
 async function mint() {
     const argAddress = process.argv[3]
     const argContentTypeOrFilename = process.argv[4]
-    const argHexData = process.argv[5]
 
     let address = new Address(argAddress)
     let contentType
@@ -238,9 +237,7 @@ async function broadcastAll(txs, retry) {
         try {
             await broadcast(txs[i], retry)
         } catch (e) {
-            console.log('broadcast failed', e.response.data)
-            console.log('saving pending txs to pending-txs.json')
-            console.log('to reattempt broadcast, re-run the command')
+            console.log('❌ broadcast failed', e)
             fs.writeFileSync(PENDING_PATH, JSON.stringify(txs.slice(i).map((tx) => tx.toString())))
             process.exit(1)
         }
@@ -250,7 +247,7 @@ async function broadcastAll(txs, retry) {
 		fs.rmSync(PENDING_PATH)
 	} catch (e) {}
 
-    console.log('inscription txid:', txs[1].hash)
+    console.log('✅ inscription txid:', txs[1].hash)
     return true
 }
 
@@ -275,18 +272,14 @@ function opcodeToChunk(op) {
     return { opcodenum: op }
 }
 
-
 const MAX_CHUNK_LEN = 240
 const MAX_PAYLOAD_LEN = 1500
-
 
 function inscribe(wallet, address, contentType, data) {
     let txs = []
 
-
     let privateKey = new PrivateKey(wallet.privkey)
     let publicKey = privateKey.toPublicKey()
-
 
     let parts = []
     while (data.length) {
@@ -294,7 +287,6 @@ function inscribe(wallet, address, contentType, data) {
         data = data.slice(part.length)
         parts.push(part)
     }
-
 
     let inscription = new Script()
     inscription.chunks.push(bufferToChunk('ord'))
@@ -304,8 +296,6 @@ function inscribe(wallet, address, contentType, data) {
         inscription.chunks.push(numberToChunk(parts.length - n - 1))
         inscription.chunks.push(bufferToChunk(part))
     })
-
-
 
     let p2shInput
     let lastLock
@@ -328,7 +318,6 @@ function inscribe(wallet, address, contentType, data) {
             inscription.chunks.unshift(partial.chunks.pop())
         }
 
-
         let lock = new Script()
         lock.chunks.push(bufferToChunk(publicKey.toBuffer()))
         lock.chunks.push(opcodeToChunk(Opcode.OP_CHECKSIGVERIFY))
@@ -337,22 +326,17 @@ function inscribe(wallet, address, contentType, data) {
         })
         lock.chunks.push(opcodeToChunk(Opcode.OP_TRUE))
 
-
-
         let lockhash = Hash.ripemd160(Hash.sha256(lock.toBuffer()))
-
 
         let p2sh = new Script()
         p2sh.chunks.push(opcodeToChunk(Opcode.OP_HASH160))
         p2sh.chunks.push(bufferToChunk(lockhash))
         p2sh.chunks.push(opcodeToChunk(Opcode.OP_EQUAL))
 
-
         let p2shOutput = new Transaction.Output({
             script: p2sh,
-            satoshis: 100000
+            satoshis: 11000000
         })
-
 
         let tx = new Transaction()
         if (p2shInput) tx.addInput(p2shInput)
@@ -370,7 +354,6 @@ function inscribe(wallet, address, contentType, data) {
             tx.inputs[0].setScript(unlock)
         }
 
-
         updateWallet(wallet, tx)
         txs.push(tx)
 
@@ -384,16 +367,13 @@ function inscribe(wallet, address, contentType, data) {
         p2shInput.clearSignatures = () => {}
         p2shInput.getSignatures = () => {}
 
-
         lastLock = lock
         lastPartial = partial
-
     }
-
 
     let tx = new Transaction()
     tx.addInput(p2shInput)
-    tx.to(address, 100000)
+    tx.to(address, 10000000)
     fund(wallet, tx)
 
     let signature = Transaction.sighash.sign(tx, privateKey, Signature.SIGHASH_ALL, 0, lastLock)
@@ -408,10 +388,8 @@ function inscribe(wallet, address, contentType, data) {
     updateWallet(wallet, tx)
     txs.push(tx)
 
-
     return txs
 }
-
 
 function fund(wallet, tx) {
     tx.change(wallet.address)
@@ -528,7 +506,6 @@ async function extract(txid) {
     console.log(script)
     let chunks = script.chunks
 
-
     let prefix = chunks.shift().buf.toString('utf8')
     if (prefix != 'ord') {
         throw new Error('not an ordibell')
@@ -537,7 +514,6 @@ async function extract(txid) {
     let pieces = chunkToNumber(chunks.shift())
 
     let contentType = chunks.shift().buf.toString('utf8')
-
 
     let data = Buffer.alloc(0)
     let remaining = pieces
@@ -564,7 +540,6 @@ async function extract(txid) {
     }
 }
 
-
 function server() {
     const app = express()
     const port = process.env.SERVER_PORT ? parseInt(process.env.SERVER_PORT) : 3000
@@ -583,7 +558,6 @@ function server() {
         console.log(`http://localhost:${port}/tx/15f3b73df7e5c072becb1d84191843ba080734805addfccb650929719080f62e`)
     })
 }
-
 
 main().catch(e => {
     let reason = e.response && e.response.data && e.response.data.error && e.response.data.error.message
