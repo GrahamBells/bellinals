@@ -11575,8 +11575,9 @@ Transaction.prototype._getUnspentValue = function() {
 };
 
 Transaction.prototype._clearSignatures = function() {
+  console.log('yo');
   _.each(this.inputs, function(input) {
-    input.clearSignatures();
+    //input.clearSignatures();
   });
 };
 

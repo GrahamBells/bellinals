@@ -22,29 +22,40 @@ if (process.env.FEE_PER_KB) {
 }
 
 const WALLET_PATH = process.env.WALLET || '.wallet.json'
-
+const PENDING_PATH = WALLET_PATH.replace('wallet', 'pending-txs')
 
 async function main() {
     let cmd = process.argv[2]
 
-    if (fs.existsSync('pending-txs.json')) {
-        console.log('found pending-txs.json. rebroadcasting...')
-        const txs = JSON.parse(fs.readFileSync('pending-txs.json'))
-        await broadcastAll(txs.map(tx => new Transaction(tx)), false)
-        return 
-    }
+	if (cmd == 'mint') {
+		if (fs.existsSync(PENDING_PATH)) {
+			console.log('found pending-txs.json. rebroadcasting...')
+			const txs = JSON.parse(fs.readFileSync(PENDING_PATH))
+			await broadcastAll(
+				txs.map((tx) => new Transaction(tx)),
+				false
+			)
+			return
+		}
+		const count = parseInt(process.argv[5], 10)
 
-    if (cmd == 'mint') {
-        await mint()
-    } else if (cmd == 'wallet') {
-        await wallet()
-    } else if (cmd == 'server') {
-        await server()
-    } else {
-        throw new Error(`unknown command: ${cmd}`)
-    }
+		if (!isNaN(count)) {
+			for (let i = 0; i < count; i++) {
+				await mint()
+			}
+		} else {
+			await mint()
+		}
+	} else if (cmd == 'mint-bellmap') {
+		await mintBellmap()
+	} else if (cmd == 'wallet') {
+		await wallet()
+	} else if (cmd == 'server') {
+		await server()
+	} else {
+		throw new Error(`unknown command: ${cmd}`)
+	}
 }
-
 
 async function wallet() {
     let subcmd = process.argv[3]
@@ -64,7 +75,6 @@ async function wallet() {
     }
 }
 
-
 function walletNew() {
     if (!fs.existsSync(WALLET_PATH)) {
         const privateKey = new PrivateKey()
@@ -77,7 +87,6 @@ function walletNew() {
         throw new Error('wallet already exists')
     }
 }
-
 
 async function walletSync() {
     if (process.env.TESTNET == 'true') throw new Error('no testnet api')
@@ -106,8 +115,8 @@ async function walletSync() {
         return {
             txid: output.txid,
             vout: output.vout,
-            script: output.scriptPubKey,
-            satoshis: (output.amount * 100000000)
+            satoshis: (output.amount * 100000000),
+            script: output.scriptPubKey
         }
     })
 
@@ -118,7 +127,6 @@ async function walletSync() {
     console.log('balance', balance)
 }
 
-
 function walletBalance() {
     let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
 
@@ -126,7 +134,6 @@ function walletBalance() {
 
     console.log(wallet.address, balance)
 }
-
 
 async function walletSend() {
     const argAddress = process.argv[4]
@@ -155,7 +162,6 @@ async function walletSend() {
     console.log(tx.hash)
 }
 
-
 async function walletSplit() {
     let splits = parseInt(process.argv[4])
 
@@ -177,14 +183,28 @@ async function walletSplit() {
     console.log(tx.hash)
 }
 
-
 const MAX_SCRIPT_ELEMENT_SIZE = 520
+
+async function mintBellmap() {
+	const argAddress = process.argv[3]
+	const start = parseInt(process.argv[4], 10)
+	const end = parseInt(process.argv[5], 10)
+	let address = new Address(argAddress)
+
+	for (let i = start; i <= end; i++) {
+		const data = Buffer.from(`${i}.bellmap`, 'utf8')
+		const contentType = 'text/plain'
+
+		let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
+		let txs = inscribe(wallet, address, contentType, data)
+		console.log(`${i}.bellmap`)
+		await broadcastAll(txs, false)
+	}
+}
 
 async function mint() {
     const argAddress = process.argv[3]
     const argContentTypeOrFilename = process.argv[4]
-    const argHexData = process.argv[5]
-
 
     let address = new Address(argAddress)
     let contentType
@@ -194,9 +214,7 @@ async function mint() {
         contentType = mime.contentType(mime.lookup(argContentTypeOrFilename))
         data = fs.readFileSync(argContentTypeOrFilename)
     } else {
-        contentType = argContentTypeOrFilename
-        if (!/^[a-fA-F0-9]*$/.test(argHexData)) throw new Error('data must be hex')
-        data = Buffer.from(argHexData, 'hex')
+        process.exit()
     }
 
     if (data.length == 0) {
@@ -207,11 +225,8 @@ async function mint() {
         throw new Error('content type too long')
     }
 
-
     let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
-
     let txs = inscribe(wallet, address, contentType, data)
-
     await broadcastAll(txs, false)
 }
 
@@ -220,24 +235,21 @@ async function broadcastAll(txs, retry) {
         console.log(`broadcasting tx ${i + 1} of ${txs.length}`)
 
         try {
-            //throw new Error('hello')
             await broadcast(txs[i], retry)
         } catch (e) {
-            console.log('broadcast failed', e.response.data)
-            console.log('saving pending txs to pending-txs.json')
-            console.log('to reattempt broadcast, re-run the command')
-            fs.writeFileSync('pending-txs.json', JSON.stringify(txs.slice(i).map(tx => tx.toString())))
+            console.log('❌ broadcast failed', e)
+            fs.writeFileSync(PENDING_PATH, JSON.stringify(txs.slice(i).map((tx) => tx.toString())))
             process.exit(1)
         }
     }
 
-    if (fs.existsSync('pending-txs.json')) {
-        fs.deleteFileSync('pending-txs.json')
-    }
+	try {
+		fs.rmSync(PENDING_PATH)
+	} catch (e) {}
 
-    console.log('inscription txid:', txs[1].hash)
+    console.log('✅ inscription txid:', txs[1].hash)
+    return true
 }
-
 
 function bufferToChunk(b, type) {
     b = Buffer.from(b, type)
@@ -260,18 +272,14 @@ function opcodeToChunk(op) {
     return { opcodenum: op }
 }
 
-
 const MAX_CHUNK_LEN = 240
 const MAX_PAYLOAD_LEN = 1500
-
 
 function inscribe(wallet, address, contentType, data) {
     let txs = []
 
-
     let privateKey = new PrivateKey(wallet.privkey)
     let publicKey = privateKey.toPublicKey()
-
 
     let parts = []
     while (data.length) {
@@ -279,7 +287,6 @@ function inscribe(wallet, address, contentType, data) {
         data = data.slice(part.length)
         parts.push(part)
     }
-
 
     let inscription = new Script()
     inscription.chunks.push(bufferToChunk('ord'))
@@ -289,8 +296,6 @@ function inscribe(wallet, address, contentType, data) {
         inscription.chunks.push(numberToChunk(parts.length - n - 1))
         inscription.chunks.push(bufferToChunk(part))
     })
-
-
 
     let p2shInput
     let lastLock
@@ -313,7 +318,6 @@ function inscribe(wallet, address, contentType, data) {
             inscription.chunks.unshift(partial.chunks.pop())
         }
 
-
         let lock = new Script()
         lock.chunks.push(bufferToChunk(publicKey.toBuffer()))
         lock.chunks.push(opcodeToChunk(Opcode.OP_CHECKSIGVERIFY))
@@ -322,22 +326,17 @@ function inscribe(wallet, address, contentType, data) {
         })
         lock.chunks.push(opcodeToChunk(Opcode.OP_TRUE))
 
-
-
         let lockhash = Hash.ripemd160(Hash.sha256(lock.toBuffer()))
-
 
         let p2sh = new Script()
         p2sh.chunks.push(opcodeToChunk(Opcode.OP_HASH160))
         p2sh.chunks.push(bufferToChunk(lockhash))
         p2sh.chunks.push(opcodeToChunk(Opcode.OP_EQUAL))
 
-
         let p2shOutput = new Transaction.Output({
             script: p2sh,
-            satoshis: 100000
+            satoshis: 11000000
         })
-
 
         let tx = new Transaction()
         if (p2shInput) tx.addInput(p2shInput)
@@ -355,7 +354,6 @@ function inscribe(wallet, address, contentType, data) {
             tx.inputs[0].setScript(unlock)
         }
 
-
         updateWallet(wallet, tx)
         txs.push(tx)
 
@@ -369,16 +367,13 @@ function inscribe(wallet, address, contentType, data) {
         p2shInput.clearSignatures = () => {}
         p2shInput.getSignatures = () => {}
 
-
         lastLock = lock
         lastPartial = partial
-
     }
-
 
     let tx = new Transaction()
     tx.addInput(p2shInput)
-    tx.to(address, 100000)
+    tx.to(address, 10000000)
     fund(wallet, tx)
 
     let signature = Transaction.sighash.sign(tx, privateKey, Signature.SIGHASH_ALL, 0, lastLock)
@@ -393,10 +388,8 @@ function inscribe(wallet, address, contentType, data) {
     updateWallet(wallet, tx)
     txs.push(tx)
 
-
     return txs
 }
-
 
 function fund(wallet, tx) {
     tx.change(wallet.address)
@@ -418,37 +411,34 @@ function fund(wallet, tx) {
     }
 }
 
-
 function updateWallet(wallet, tx) {
-    wallet.utxos = wallet.utxos.filter(utxo => {
-        for (const input of tx.inputs) {
-            if (input.prevTxId.toString('hex') == utxo.txid && input.outputIndex == utxo.vout) {
-                return false
-            }
-        }
-        return true
-    })
+	wallet.utxos = wallet.utxos.filter((utxo) => {
+		for (const input of tx.inputs) {
+			if (input.prevTxId.toString('hex') == utxo.txid && input.outputIndex == utxo.vout) {
+				return false
+			}
+		}
+		return true
+	})
 
-    tx.outputs
-        .forEach((output, vout) => {
-            if (output.script.toAddress().toString() == wallet.address) {
-                wallet.utxos.push({
-                    txid: tx.hash,
-                    vout,
-                    script: output.script.toHex(),
-                    satoshis: output.satoshis
-                })
-            }
-        })
+	tx.outputs.forEach((output, vout) => {
+		if (output.script.toAddress().toString() == wallet.address) {
+			wallet.utxos.push({
+				txid: tx.hash,
+				vout,
+				script: Script(new Address(wallet.address)).toHex(),
+				satoshis: output.satoshis
+			})
+		}
+	})
 }
-
 
 async function broadcast(tx, retry) {
     const body = {
-        jsonrpc: "1.0",
-        id: 0,
-        method: "sendrawtransaction",
-        params: [tx.toString()]
+		jsonrpc: '1.0',
+		id: 0,
+		method: 'sendrawtransaction',
+		params: [tx.toString()]
     }
 
     const options = {
@@ -458,21 +448,26 @@ async function broadcast(tx, retry) {
         }
     }
 
-    while (true) {
-        try {
-            await axios.post(process.env.NODE_RPC_URL, body, options)
-            break
-        } catch (e) {
-            if (!retry) throw e
-            let msg = e.response && e.response.data && e.response.data.error && e.response.data.error.message
-            if (msg && msg.includes('too-long-mempool-chain')) {
-                console.warn('retrying, too-long-mempool-chain')
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } else {
-                throw e
-            }
-        }
-    }
+	while (true) {
+		try {
+			await axios.post(process.env.NODE_RPC_URL, body, options)
+			break
+		} catch (e) {
+			if (!retry) {
+				let m = e && e.response && e.response.data
+				throw m ? JSON.stringify(m) : e
+			}
+
+			let msg =
+				e.response && e.response.data && e.response.data.error && e.response.data.error.message
+			if (msg && msg.includes('too-long-mempool-chain')) {
+				console.warn('retrying, too-long-mempool-chain')
+				await new Promise((resolve) => setTimeout(resolve, 1000))
+			} else {
+				throw e
+			}
+		}
+	}
 
     let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
 
@@ -481,7 +476,6 @@ async function broadcast(tx, retry) {
     fs.writeFileSync(WALLET_PATH, JSON.stringify(wallet, 0, 2))
 }
 
-
 function chunkToNumber(chunk) {
     if (chunk.opcodenum == 0) return 0
     if (chunk.opcodenum == 1) return chunk.buf[0]
@@ -489,7 +483,6 @@ function chunkToNumber(chunk) {
     if (chunk.opcodenum > 80 && chunk.opcodenum <= 96) return chunk.opcodenum - 80
     return undefined
 }
-
 
 async function extract(txid) {
     
@@ -513,7 +506,6 @@ async function extract(txid) {
     console.log(script)
     let chunks = script.chunks
 
-
     let prefix = chunks.shift().buf.toString('utf8')
     if (prefix != 'ord') {
         throw new Error('not an ordibell')
@@ -522,7 +514,6 @@ async function extract(txid) {
     let pieces = chunkToNumber(chunks.shift())
 
     let contentType = chunks.shift().buf.toString('utf8')
-
 
     let data = Buffer.alloc(0)
     let remaining = pieces
@@ -549,7 +540,6 @@ async function extract(txid) {
     }
 }
 
-
 function server() {
     const app = express()
     const port = process.env.SERVER_PORT ? parseInt(process.env.SERVER_PORT) : 3000
@@ -568,7 +558,6 @@ function server() {
         console.log(`http://localhost:${port}/tx/15f3b73df7e5c072becb1d84191843ba080734805addfccb650929719080f62e`)
     })
 }
-
 
 main().catch(e => {
     let reason = e.response && e.response.data && e.response.data.error && e.response.data.error.message

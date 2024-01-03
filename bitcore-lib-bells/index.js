@@ -1,71 +1,71 @@
 'use strict';
 
-var bellcore = module.exports;
+var dogecore = module.exports;
 
 // module information
-bellcore.version = 'v' + require('./package.json').version;
-bellcore.versionGuard = function(version) {
+dogecore.version = 'v' + require('./package.json').version;
+dogecore.versionGuard = function(version) {
   if (version !== undefined) {
-    var message = 'More than one instance of bellcore found. ' +
-      'Please make sure to require bellcore and check that submodules do' +
-      ' not also include their own bellcore dependency.';
+    var message = 'More than one instance of dogecore found. ' +
+      'Please make sure to require dogecore and check that submodules do' +
+      ' not also include their own dogecore dependency.';
     throw new Error(message);
   }
 };
-bellcore.versionGuard(global._bellcore);
-global._bellcore = bellcore.version;
+dogecore.versionGuard(global._dogecore);
+global._dogecore = dogecore.version;
 
 // crypto
-bellcore.crypto = {};
-bellcore.crypto.BN = require('./lib/crypto/bn');
-bellcore.crypto.ECDSA = require('./lib/crypto/ecdsa');
-bellcore.crypto.Hash = require('./lib/crypto/hash');
-bellcore.crypto.Random = require('./lib/crypto/random');
-bellcore.crypto.Point = require('./lib/crypto/point');
-bellcore.crypto.Signature = require('./lib/crypto/signature');
+dogecore.crypto = {};
+dogecore.crypto.BN = require('./lib/crypto/bn');
+dogecore.crypto.ECDSA = require('./lib/crypto/ecdsa');
+dogecore.crypto.Hash = require('./lib/crypto/hash');
+dogecore.crypto.Random = require('./lib/crypto/random');
+dogecore.crypto.Point = require('./lib/crypto/point');
+dogecore.crypto.Signature = require('./lib/crypto/signature');
 
 // encoding
-bellcore.encoding = {};
-bellcore.encoding.Base58 = require('./lib/encoding/base58');
-bellcore.encoding.Base58Check = require('./lib/encoding/base58check');
-bellcore.encoding.BufferReader = require('./lib/encoding/bufferreader');
-bellcore.encoding.BufferWriter = require('./lib/encoding/bufferwriter');
-bellcore.encoding.Varint = require('./lib/encoding/varint');
+dogecore.encoding = {};
+dogecore.encoding.Base58 = require('./lib/encoding/base58');
+dogecore.encoding.Base58Check = require('./lib/encoding/base58check');
+dogecore.encoding.BufferReader = require('./lib/encoding/bufferreader');
+dogecore.encoding.BufferWriter = require('./lib/encoding/bufferwriter');
+dogecore.encoding.Varint = require('./lib/encoding/varint');
 
 // utilities
-bellcore.util = {};
-bellcore.util.buffer = require('./lib/util/buffer');
-bellcore.util.js = require('./lib/util/js');
-bellcore.util.preconditions = require('./lib/util/preconditions');
+dogecore.util = {};
+dogecore.util.buffer = require('./lib/util/buffer');
+dogecore.util.js = require('./lib/util/js');
+dogecore.util.preconditions = require('./lib/util/preconditions');
 
 // errors thrown by the library
-bellcore.errors = require('./lib/errors');
+dogecore.errors = require('./lib/errors');
 
 // main bitcoin library
-bellcore.Address = require('./lib/address');
-bellcore.Block = require('./lib/block');
-bellcore.MerkleBlock = require('./lib/block/merkleblock');
-bellcore.BlockHeader = require('./lib/block/blockheader');
-bellcore.HDPrivateKey = require('./lib/hdprivatekey.js');
-bellcore.HDPublicKey = require('./lib/hdpublickey.js');
-bellcore.Networks = require('./lib/networks');
-bellcore.Opcode = require('./lib/opcode');
-bellcore.PrivateKey = require('./lib/privatekey');
-bellcore.PublicKey = require('./lib/publickey');
-bellcore.Script = require('./lib/script');
-bellcore.Transaction = require('./lib/transaction');
-bellcore.URI = require('./lib/uri');
-bellcore.Unit = require('./lib/unit');
+dogecore.Address = require('./lib/address');
+dogecore.Block = require('./lib/block');
+dogecore.MerkleBlock = require('./lib/block/merkleblock');
+dogecore.BlockHeader = require('./lib/block/blockheader');
+dogecore.HDPrivateKey = require('./lib/hdprivatekey.js');
+dogecore.HDPublicKey = require('./lib/hdpublickey.js');
+dogecore.Networks = require('./lib/networks');
+dogecore.Opcode = require('./lib/opcode');
+dogecore.PrivateKey = require('./lib/privatekey');
+dogecore.PublicKey = require('./lib/publickey');
+dogecore.Script = require('./lib/script');
+dogecore.Transaction = require('./lib/transaction');
+dogecore.URI = require('./lib/uri');
+dogecore.Unit = require('./lib/unit');
 
 // dependencies, subject to change
-bellcore.deps = {};
-bellcore.deps.bnjs = require('bn.js');
-bellcore.deps.bs58 = require('bs58');
-bellcore.deps.Buffer = Buffer;
-bellcore.deps.elliptic = require('elliptic');
-bellcore.deps.scryptsy = require('scryptsy');
-bellcore.deps._ = require('lodash');
+dogecore.deps = {};
+dogecore.deps.bnjs = require('bn.js');
+dogecore.deps.bs58 = require('bs58');
+dogecore.deps.Buffer = Buffer;
+dogecore.deps.elliptic = require('elliptic');
+dogecore.deps.scryptsy = require('scryptsy');
+dogecore.deps._ = require('lodash');
 
 // Internal usage, exposed for testing/advanced tweaking
-bellcore._HDKeyCache = require('./lib/hdkeycache');
-bellcore.Transaction.sighash = require('./lib/transaction/sighash');
+dogecore._HDKeyCache = require('./lib/hdkeycache');
+dogecore.Transaction.sighash = require('./lib/transaction/sighash');

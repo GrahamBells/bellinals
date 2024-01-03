@@ -138,13 +138,13 @@ function addNetwork(data) {
 addNetwork({
   name: 'livenet',
   alias: 'mainnet',
-  pubkeyhash: 0x19, // 25
-  privatekey: 0x99, // 153
-  scripthash: 0x1e, // 30
-  xpubkey: 0x02facafd,
-  xprivkey: 0x02fac398,
+  pubkeyhash: 25,
+  privatekey: 0x99,
+  scripthash: 30,
+  xpubkey: 0x043587cf,
+  xprivkey: 0x04358394,
   networkMagic: 0xc0c0c0c0,
-  port: 19919,
+  port: 19918,
   dnsSeeds: [
     'seed.multidoge.org',
     'seed2.multidoge.org',

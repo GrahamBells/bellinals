@@ -7,7 +7,7 @@ var Address = require('./address');
 var Unit = require('./unit');
 
 /**
- * bellcore URI
+ * Dogecore URI
  *
  * Instantiate an URI from a dogecoin URI String or an Object. An URI instance
  * can be created with a dogecoin uri string or an object. All instances of
