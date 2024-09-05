@@ -74,12 +74,24 @@ function get(arg, keys) {
     }
     return undefined;
   }
-  if(networkMaps[arg] && networkMaps[arg].length >= 1) {
+  if (networkMaps[arg] && networkMaps[arg].length >= 1) {
     return networkMaps[arg][0];
   } else {
     return networkMaps[arg];
   }
 }
+
+/**
+ * @function
+ * @member Networks#is
+ * Returns true if the string is the network name or alias
+ * @param {string} str - A string to check
+ * @return boolean
+ */
+function is(str) {
+  return this.name == str || this.alias == str;
+}
+
 /**
  * @function
  * @member Networks#add
@@ -102,9 +114,12 @@ function addNetwork(data) {
   JSUtil.defineImmutable(network, {
     name: data.name,
     alias: data.alias,
+    is: data.is,
     pubkeyhash: data.pubkeyhash,
     privatekey: data.privatekey,
     scripthash: data.scripthash,
+    scripthash2: data.scripthash2,
+    bech32prefix: data.bech32prefix,
     xpubkey: data.xpubkey,
     xprivkey: data.xprivkey
   });
@@ -112,6 +127,7 @@ function addNetwork(data) {
     JSUtil.defineImmutable(network, {
       networkMagic: BufferUtil.integerAsBuffer(data.networkMagic)
     });
+    networkMaps[network.networkMagic.toString('hex')] = network;
   }
   if (data.port) {
     JSUtil.defineImmutable(network, {
@@ -123,24 +139,73 @@ function addNetwork(data) {
       dnsSeeds: data.dnsSeeds
     });
   }
-  _.each(network, function(value) {
-    if (!_.isUndefined(value) && !_.isObject(value)) {
-      if(!networkMaps[value]) {
+
+  if (data.bech32prefix) {
+    JSUtil.defineImmutable(network, {
+      bech32prefix: data.bech32prefix
+    });
+  }
+
+  for (const value of Object.values(network)) {
+    if (value != null && typeof value !== 'object') {
+      if (!networkMaps[value]) {
         networkMaps[value] = [];
       }
       networkMaps[value].push(network);
     }
-  });
+  };
   networks.push(network);
+
+  for (const variant of data.variants || []) {
+    addNetwork({
+      ...data,
+      variants: undefined,
+      ...variant,
+    });
+  }
+
   return network;
+}
+
+/**
+ * @function
+ * @member Networks#remove
+ * Will remove a custom network
+ * @param {Network} network
+ */
+function removeNetwork(network) {
+  if (typeof network !== 'object') {
+    network = get(network);
+  }
+  for (var i = 0; i < networks.length; i++) {
+    if (networks[i] === network) {
+      networks.splice(i, 1);
+    }
+  }
+  for (var key in networkMaps) {
+    if (networkMaps[key].length) {
+      const index = networkMaps[key].indexOf(network);
+      if (index >= 0) {
+        networkMaps[key].splice(index, 1);
+      }
+      if (networkMaps[key].length === 0) {
+        delete networkMaps[key];
+      }
+    } else if (networkMaps[key] === network) {
+      delete networkMaps[key];
+    }
+  }
 }
 
 addNetwork({
   name: 'livenet',
   alias: 'mainnet',
-  pubkeyhash: 25,
-  privatekey: 0x99,
-  scripthash: 30,
+  is,
+  pubkeyhash: 0x19, // 25
+  privatekey: 0x99, // 153
+  scripthash: 0x1e, // 30
+  scripthash2: 0x05, // 5
+  bech32prefix: 'bel',
   xpubkey: 0x043587cf,
   xprivkey: 0x04358394,
   networkMagic: 0xc0c0c0c0,

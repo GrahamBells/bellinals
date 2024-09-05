@@ -77,14 +77,6 @@ Interpreter.prototype.verifyWitnessProgram = function(version, program, witness,
     return true;
   }
 
-  // Disallow stack item size > MAX_SCRIPT_ELEMENT_SIZE in witness stack
-  for (let i = 0; i < stack.length; i++) {
-    if (stack[i].length > Interpreter.MAX_SCRIPT_ELEMENT_SIZE) {
-      this.errstr = 'SCRIPT_ERR_PUSH_SIZE';
-      return false;
-    }
-  }
-
   this.initialize();
 
   this.set({
@@ -94,6 +86,14 @@ Interpreter.prototype.verifyWitnessProgram = function(version, program, witness,
     satoshis: satoshis,
     flags: flags,
   });
+
+  // Disallow stack item size > MAX_SCRIPT_ELEMENT_SIZE in witness stack
+  for (let s of stack) {
+    if (s.length > Interpreter.MAX_SCRIPT_ELEMENT_SIZE) {
+      this.errstr = 'SCRIPT_ERR_PUSH_SIZE';
+      return false;
+    }
+  }
 
   if (!this.evaluate()) {
     return false;
@@ -399,7 +399,13 @@ Interpreter.SCRIPT_VERIFY_CLEANSTACK = (1 << 8),
 
 // CLTV See BIP65 for details.
 Interpreter.SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY = (1 << 9);
+
+// https://github.com/dogecoin/dogecoin/blob/f80bfe9068ac1a0619d48dad0d268894d926941e/src/script/interpreter.h#L92
+// Support segregated witness
+//
 Interpreter.SCRIPT_VERIFY_WITNESS = (1 << 11);
+
+Interpreter.SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS = (1 << 11);
 
 // support CHECKSEQUENCEVERIFY opcode
 //
@@ -421,33 +427,17 @@ Interpreter.SCRIPT_VERIFY_NULLFAIL = (1 << 14);
 //
 Interpreter.SCRIPT_VERIFY_WITNESS_PUBKEYTYPE = (1 << 15);
 
-// Making OP_CODESEPARATOR and FindAndDelete fail any non-segwit scripts
+// Do we accept signature using SIGHASH_FORKID
 //
-Interpreter.SCRIPT_VERIFY_CONST_SCRIPTCODE = (1 << 16);
+Interpreter.SCRIPT_ENABLE_SIGHASH_FORKID = (1 << 16);
 
+// Do we accept activate replay protection using a different fork id.
+//
+Interpreter.SCRIPT_ENABLE_REPLAY_PROTECTION = (1 << 17);
 
-
-// TODO: move to script.js ?
-Interpreter.MAX_OPS_PER_SCRIPT = 201;
-
-// Maximum number of public keys per multisig
-Interpreter.MAX_PUBKEYS_PER_MULTISIG = 20;
-
-// Maximum script length in bytes
-Interpreter.MAX_SCRIPT_SIZE = 10000;
-
-// Maximum number of values on script interpreter stack
-Interpreter.MAX_STACK_SIZE = 1000;
-
-// Threshold for nLockTime: below this value it is interpreted as block number,
-// otherwise as UNIX timestamp.
-Interpreter.LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
-
-// Maximum nLockTime. Since a lock time indicates the last invalid timestamp, a
-// transaction with this lock time will never be valid unless lock time
-// checking is disabled (by setting all input sequence numbers to
-// SEQUENCE_FINAL).
-Interpreter.LOCKTIME_MAX = 0xFFFFFFFF;
+// Enable new opcodes.
+//
+Interpreter.SCRIPT_ENABLE_MONOLITH_OPCODES = (1 << 18);
 
 
 
@@ -456,7 +446,7 @@ Interpreter.LOCKTIME_MAX = 0xFFFFFFFF;
  * If this flag set, CTxIn::nSequence is NOT interpreted as a relative
  * lock-time.
  */
-Interpreter.SEQUENCE_LOCKTIME_DISABLE_FLAG = 2147483648; // (1 << 31)
+Interpreter.SEQUENCE_LOCKTIME_DISABLE_FLAG = (1 << 31);
 
 /**
  * If CTxIn::nSequence encodes a relative lock-time and this flag is set,
@@ -470,6 +460,7 @@ Interpreter.SEQUENCE_LOCKTIME_TYPE_FLAG = (1 << 22);
  * extract that lock-time from the sequence field.
  */
 Interpreter.SEQUENCE_LOCKTIME_MASK = 0x0000ffff;
+
 
 Interpreter.SIGVERSION_BASE = 0;
 Interpreter.SIGVERSION_WITNESS_V0 = 1;
@@ -645,7 +636,8 @@ Interpreter.prototype.checkSequence = function(nSequence) {
     // constrained. Testing that the transaction's sequence number do not have
     // this bit set prevents using this property to get around a
     // CHECKSEQUENCEVERIFY check.
-    if (txToSequence & Interpreter.SEQUENCE_LOCKTIME_DISABLE_FLAG) {
+    var SEQUENCE_LOCKTIME_DISABLE_FLAG = Interpreter.SEQUENCE_LOCKTIME_DISABLE_FLAG;
+    if (txToSequence & SEQUENCE_LOCKTIME_DISABLE_FLAG) {
         return false;
     }
 
@@ -729,12 +721,6 @@ Interpreter.prototype.step = function() {
     opcodenum === Opcode.OP_LSHIFT ||
     opcodenum === Opcode.OP_RSHIFT) {
     this.errstr = 'SCRIPT_ERR_DISABLED_OPCODE';
-    return false;
-  }
-
-  // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
-  if (opcodenum === Opcode.OP_CODESEPARATOR && this.sigversion === Interpreter.SIGVERSION_BASE && (this.flags & Interpreter.SCRIPT_VERIFY_CONST_SCRIPTCODE)) {
-    this.errstr = 'SCRIPT_ERR_OP_CODESEPARATOR';
     return false;
   }
 
@@ -1477,6 +1463,9 @@ Interpreter.prototype.step = function() {
 
           bufSig = this.stack[this.stack.length - 2];
           bufPubkey = this.stack[this.stack.length - 1];
+          if (!this.checkSignatureEncoding(bufSig) || !this.checkPubkeyEncoding(bufPubkey)) {
+            return false;
+          }
 
           // Subset of script starting at the most recent codeseparator
           // CScript scriptCode(pbegincodehash, pend);
@@ -1484,23 +1473,10 @@ Interpreter.prototype.step = function() {
             chunks: this.script.chunks.slice(this.pbegincodehash)
           });
 
-
-          // Drop the signature in pre-segwit scripts but not segwit scripts
+          // Drop the signature, since there's no way for a signature to sign itself
           if (this.sigversion === Interpreter.SIGVERSION_BASE) {
-            // Drop the signature, since there's no way for a signature to sign itself
             var tmpScript = new Script().add(bufSig);
-            var preDelCount = subscript.chunks.length;
             subscript.findAndDelete(tmpScript);
-
-            var found = subscript.chunks.length < preDelCount;
-            if (found && (this.flags & Interpreter.SCRIPT_VERIFY_CONST_SCRIPTCODE)) {
-              this.errstr = 'SCRIPT_ERR_SIG_FINDANDDELETE';
-              return false;
-            }
-          }
-        
-          if (!this.checkSignatureEncoding(bufSig) || !this.checkPubkeyEncoding(bufPubkey)) {
-            return false;
           }
 
           try {
@@ -1588,18 +1564,11 @@ Interpreter.prototype.step = function() {
             chunks: this.script.chunks.slice(this.pbegincodehash)
           });
 
-          // Drop the signature in pre-segwit scripts but not segwit scripts
-          for (var k = 0; k < nSigsCount; k++) {
-            bufSig = this.stack[this.stack.length - isig - k];
-            if (this.sigversion === Interpreter.SIGVERSION_BASE) {
-              let preDelCount = subscript.chunks.length;
+          // Drop the signatures, since there's no way for a signature to sign itself
+          if (this.sigversion === Interpreter.SIGVERSION_BASE) {
+            for (var k = 0; k < nSigsCount; k++) {
+              bufSig = this.stack[this.stack.length - isig - k];
               subscript.findAndDelete(new Script().add(bufSig));
-
-              const found = subscript.chunks.length < preDelCount;
-              if (found && (this.flags & Interpreter.SCRIPT_VERIFY_CONST_SCRIPTCODE)) {
-                this.errstr = 'SCRIPT_ERR_SIG_FINDANDDELETE';
-                return false;
-              }
             }
           }
 
